@@ -57,12 +57,15 @@ static const CGFloat kMinImageScale = 1.0f;
 
 @property(nonatomic,weak) UIView * superView;
 
+@property(nonatomic) UIStatusBarStyle statusBarStyle;
+
 - (void) loadAllRequiredViews;
 - (void) setImageURL:(NSURL *)imageURL defaultImage:(UIImage*)defaultImage imageIndex:(NSInteger)imageIndex;
 
 @end
 
 @implementation MHFacebookImageViewerCell
+
 @synthesize originalFrameRelativeToScreen = _originalFrameRelativeToScreen;
 @synthesize rootViewController = _rootViewController;
 @synthesize viewController = _viewController;
@@ -78,13 +81,14 @@ static const CGFloat kMinImageScale = 1.0f;
 
 - (void) loadAllRequiredViews{
   self.selectionStyle = UITableViewCellSelectionStyleNone;
-  CGRect frame = [UIScreen mainScreen].applicationFrame;
+  CGRect frame = [UIScreen mainScreen].bounds;
   __scrollView = [[UIScrollView alloc]initWithFrame:frame];
   __scrollView.delegate = self;
+  __scrollView.backgroundColor = [UIColor clearColor];
   [self addSubview:__scrollView];
-  //    [_doneButton addTarget:self
-  //                    action:@selector(close:)
-  //          forControlEvents:UIControlEventTouchUpInside];
+  // [_doneButton addTarget:self
+  //                 action:@selector(close:)
+  //       forControlEvents:UIControlEventTouchUpInside];
 }
 
 - (void) setImageURL:(NSURL *)imageURL defaultImage:(UIImage*)defaultImage imageIndex:(NSInteger)imageIndex {
@@ -164,11 +168,13 @@ static const CGFloat kMinImageScale = 1.0f;
 }
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer
 {
-  UITableView * tableView = (UITableView*)self.superview;
-  if ([otherGestureRecognizer isEqual:(tableView.panGestureRecognizer)])
-  {
-    return NO;
-  }
+  // Uncomment once iOS7 beta5 bugs for panGestures are worked out
+  //    UITableView * tableView = (UITableView*)self.superview;
+  //    if ( [tableView respondsToSelector:@selector(panGestureRecognizer)] &&
+  //         [otherGestureRecognizer isEqual:(tableView.panGestureRecognizer)] )
+  //    {
+  //        return NO;
+  //    }
   return YES;
 }
 
@@ -225,31 +231,32 @@ static const CGFloat kMinImageScale = 1.0f;
 {
   _isAnimating = YES;
   dispatch_async(dispatch_get_main_queue(), ^{
-    [self hideDoneButton];
-    __imageView.clipsToBounds = YES;
-    CGFloat screenHeight =  [[UIScreen mainScreen] applicationFrame].size.height;
-    CGFloat imageYCenterPosition = __imageView.frame.origin.y + __imageView.frame.size.height/2 ;
-    BOOL isGoingUp =  imageYCenterPosition < screenHeight/2;
-    [UIView animateWithDuration:0.2f delay:0.0f options:0 animations:^{
-      if(_imageIndex==_initialIndex){
-        __imageView.frame = _originalFrameRelativeToScreen;
-      }else {
-        __imageView.frame = CGRectMake(__imageView.frame.origin.x, isGoingUp?-screenHeight:screenHeight, __imageView.frame.size.width, __imageView.frame.size.height);
-      }
-      CGAffineTransform transf = CGAffineTransformIdentity;
-      _rootViewController.view.transform = CGAffineTransformScale(transf, 1.0f, 1.0f);
-      _blackMask.alpha = 0.0f;
-    } completion:^(BOOL finished) {
-      if (finished) {
-        [_viewController.view removeFromSuperview];
-        [_viewController removeFromParentViewController];
-        _senderView.alpha = 1.0f;
-        [UIApplication sharedApplication].statusBarHidden = NO;
-        _isAnimating = NO;
-        if(_closingBlock)
-          _closingBlock();
-      }
-    }];
+      [self hideDoneButton];
+      __imageView.clipsToBounds = YES;
+      CGFloat screenHeight =  [[UIScreen mainScreen] bounds].size.height;
+      CGFloat imageYCenterPosition = __imageView.frame.origin.y + __imageView.frame.size.height/2 ;
+      BOOL isGoingUp =  imageYCenterPosition < screenHeight/2;
+      [UIView animateWithDuration:0.2f delay:0.0f options:0 animations:^{
+          if(_imageIndex==_initialIndex){
+              __imageView.frame = _originalFrameRelativeToScreen;
+          }else {
+              __imageView.frame = CGRectMake(__imageView.frame.origin.x, isGoingUp?-screenHeight:screenHeight, __imageView.frame.size.width, __imageView.frame.size.height);
+          }
+          CGAffineTransform transf = CGAffineTransformIdentity;
+          _rootViewController.view.transform = CGAffineTransformScale(transf, 1.0f, 1.0f);
+          _blackMask.alpha = 0.0f;
+      } completion:^(BOOL finished) {
+          if (finished) {
+              [_viewController.view removeFromSuperview];
+              [_viewController removeFromParentViewController];
+              _senderView.alpha = 1.0f;
+              [UIApplication sharedApplication].statusBarHidden = NO;
+              [UIApplication sharedApplication].statusBarStyle = _statusBarStyle;
+              _isAnimating = NO;
+              if(_closingBlock)
+                  _closingBlock();
+          }
+      }];
   });
 }
 
@@ -405,6 +412,8 @@ static const CGFloat kMinImageScale = 1.0f;
   
   BOOL _isAnimating;
   BOOL _isDoneAnimating;
+  
+  UIStatusBarStyle _statusBarStyle;
 }
 
 @end
@@ -432,27 +441,29 @@ static const CGFloat kMinImageScale = 1.0f;
   static NSString * cellID = @"mhfacebookImageViewerCell";
   MHFacebookImageViewerCell * imageViewerCell = [tableView dequeueReusableCellWithIdentifier:cellID];
   if(!imageViewerCell) {
-    CGRect windowFrame = [[UIScreen mainScreen] applicationFrame];
-    imageViewerCell = [[MHFacebookImageViewerCell alloc]initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellID];
-    imageViewerCell.transform = CGAffineTransformMakeRotation(M_PI_2);
-    imageViewerCell.frame = CGRectMake(0,0,windowFrame.size.width, windowFrame.size.height);
-    imageViewerCell.originalFrameRelativeToScreen = _originalFrameRelativeToScreen;
-    imageViewerCell.viewController = self;
-    imageViewerCell.blackMask = _blackMask;
-    imageViewerCell.rootViewController = _rootViewController;
-    imageViewerCell.closingBlock = _closingBlock;
-    imageViewerCell.openingBlock = _openingBlock;
-    imageViewerCell.superView = _senderView.superview;
-    imageViewerCell.senderView = _senderView;
-    //        imageViewerCell.doneButton = _doneButton;
-    imageViewerCell.initialIndex = _initialIndex;
-    [imageViewerCell loadAllRequiredViews];
+      CGRect windowFrame = [[UIScreen mainScreen] bounds];
+      imageViewerCell = [[MHFacebookImageViewerCell alloc]initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellID];
+      imageViewerCell.transform = CGAffineTransformMakeRotation(M_PI_2);
+      imageViewerCell.frame = CGRectMake(0,0,windowFrame.size.width, windowFrame.size.height);
+      imageViewerCell.originalFrameRelativeToScreen = _originalFrameRelativeToScreen;
+      imageViewerCell.viewController = self;
+      imageViewerCell.blackMask = _blackMask;
+      imageViewerCell.rootViewController = _rootViewController;
+      imageViewerCell.closingBlock = _closingBlock;
+      imageViewerCell.openingBlock = _openingBlock;
+      imageViewerCell.superView = _senderView.superview;
+      imageViewerCell.senderView = _senderView;
+      // imageViewerCell.doneButton = _doneButton;
+      imageViewerCell.initialIndex = _initialIndex;
+      imageViewerCell.statusBarStyle = _statusBarStyle;
+      [imageViewerCell loadAllRequiredViews];
+      imageViewerCell.backgroundColor = [UIColor clearColor];
   }
   if(!self.imageDatasource) {
-    // Just to retain the old version
-    [imageViewerCell setImageURL:_imageURL defaultImage:_senderView.image imageIndex:0];
+      // Just to retain the old version
+      [imageViewerCell setImageURL:_imageURL defaultImage:_senderView.image imageIndex:0];
   } else {
-    [imageViewerCell setImageURL:[self.imageDatasource imageURLAtIndex:indexPath.row imageViewer:self] defaultImage:[self.imageDatasource imageDefaultAtIndex:indexPath.row imageViewer:self]imageIndex:indexPath.row];
+      [imageViewerCell setImageURL:[self.imageDatasource imageURLAtIndex:indexPath.row imageViewer:self] defaultImage:[self.imageDatasource imageDefaultAtIndex:indexPath.row imageViewer:self]imageIndex:indexPath.row];
   }
   return imageViewerCell;
 }
@@ -473,18 +484,18 @@ static const CGFloat kMinImageScale = 1.0f;
 - (void)loadView
 {
   [super loadView];
+  _statusBarStyle = [[UIApplication sharedApplication] statusBarStyle];
   [UIApplication sharedApplication].statusBarHidden = YES;
-  CGRect windowBounds = [[UIScreen mainScreen] applicationFrame];
-  
+  CGRect windowBounds = [[UIScreen mainScreen] bounds];
   
   // Compute Original Frame Relative To Screen
-  CGRect newFrame = [_senderView convertRect:[[UIScreen mainScreen] applicationFrame] toView:nil];
+  CGRect newFrame = [_senderView convertRect:windowBounds toView:nil];
   newFrame.origin = CGPointMake(newFrame.origin.x, newFrame.origin.y);
   newFrame.size = _senderView.frame.size;
   _originalFrameRelativeToScreen = newFrame;
   
   self.view = [[UIView alloc] initWithFrame:windowBounds];
-  NSLog(@"WINDOW :%@",NSStringFromCGRect([[UIScreen mainScreen] applicationFrame]));
+  NSLog(@"WINDOW :%@",NSStringFromCGRect(windowBounds));
   self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   
   // Add a Tableview
@@ -499,7 +510,7 @@ static const CGFloat kMinImageScale = 1.0f;
   _tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
   _tableView.backgroundColor = [UIColor clearColor];
   [_tableView setShowsVerticalScrollIndicator:NO];
-  [_tableView setContentOffset:CGPointMake(0, _initialIndex * [[UIScreen mainScreen] applicationFrame].size.width)];
+  [_tableView setContentOffset:CGPointMake(0, _initialIndex * windowBounds.size.width)];
   
   _blackMask = [[UIView alloc] initWithFrame:windowBounds];
   _blackMask.backgroundColor = [UIColor blackColor];
@@ -509,6 +520,7 @@ static const CGFloat kMinImageScale = 1.0f;
    self.view insertSubview:_blackMask atIndex:0];
   
   _doneButton = [UIButton buttonWithType:UIButtonTypeCustom];
+  [_doneButton setImageEdgeInsets:UIEdgeInsetsMake(-10, -10, -10, -10)];  // make click area bigger
   [_doneButton setImage:[UIImage imageNamed:@"Done"] forState:UIControlStateNormal];
   _doneButton.frame = CGRectMake(windowBounds.size.width - (51.0f + 9.0f),15.0f, 51.0f, 26.0f);
 }
